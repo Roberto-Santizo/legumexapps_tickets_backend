@@ -16,9 +16,9 @@ class RegisterRequest extends FormRequest
     {
         return [
             'name' => 'required|string|max:255',
-            'username' => 'required|string|max:255|unique:users,username',
+            'email' => 'required|string|email|max:255|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
-            'role' => ['required', 'string', Rule::in(['admin', 'adminagricola', 'user'])],
+            'role' => ['required', 'string', Rule::in(['admin', 'user'])],
         ];
     }
 
@@ -26,8 +26,9 @@ class RegisterRequest extends FormRequest
     {
         return [
             'name.required' => 'El campo de nombre es obligatorio.',
-            'username.required' => 'El campo de usuario es obligatorio.',
-            'username.unique' => 'El usuario ya se encuentra registrado.',
+            'email.required' => 'El campo de correo es obligatorio.',
+            'email.email' => 'El correo no tiene un formato válido.',
+            'email.unique' => 'El correo ya se encuentra registrado.',
             'password.required' => 'El campo de contraseña es obligatorio.',
             'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
             'password.confirmed' => 'La confirmación de contraseña no coincide.',

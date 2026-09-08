@@ -123,4 +123,10 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    'initial_admin' => [
+        'name' => env('ADMIN_NAME', 'Administrador'),
+        'email' => env('ADMIN_EMAIL', 'admin@legumex.com'),
+        'password' => env('ADMIN_PASSWORD', 'admin123'),
+    ],
+
 ];

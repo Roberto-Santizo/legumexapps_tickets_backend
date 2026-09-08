@@ -31,7 +31,7 @@ class AuthController extends Controller
             $response = [
                 'id' => $user->id,
                 'name' => $user->name,
-                'username' => $user->username,
+                'email' => $user->email,
                 'role' => $user->role,
             ];
 
@@ -47,7 +47,12 @@ class AuthController extends Controller
             $user = auth()->user();
             $token = JWTAuth::fromUser($user);
 
-            $data = ['name' => $user->name, 'role' => $user->role, 'token' => $token];
+            $data = [
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'token' => $token,
+            ];
 
             return ResponseHandler::success($data, 'Usuario Obtenido Correctamente', 200);
         } catch (\Throwable $th) {
