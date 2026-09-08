@@ -18,9 +18,9 @@ return new class extends Migration
             $table->string('description');
             $table->string('status');
             $table->string('priority');
-            $table->foreignId('category_id')->constrained();
+            $table->foreignId('category_id')->constrained()->on('ticket_categories');
             $table->foreignId('user_id')->constrained();
-            $table->foreignId('assigned_to')->constrained();
+            $table->foreignId('assigned_to')->constrained()->on('users');
             $table->timestamps();
         });
     }
