@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('priority');
             $table->foreignId('category_id')->constrained()->on('ticket_categories');
             $table->foreignId('user_id')->constrained();
-            $table->foreignId('assigned_to')->constrained()->on('users');
+            $table->foreignId('assigned_to')->nullable()->constrained()->on('users');
             $table->timestamps();
         });
     }

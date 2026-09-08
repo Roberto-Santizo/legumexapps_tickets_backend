@@ -14,11 +14,11 @@ class TicketController extends Controller
      */
     public function index()
     {
-        try{
+        try {
             $tickets = Ticket::all();
 
-            return ResponseHandler::success($tickets, 'Tickets Obtenidos Correctamente', 200);
-        } catch (\Throwable $th){
+            return ResponseHandler::success($tickets,'Tickets Obtenidos Correctamente',200);
+        } catch (\Throwable $th) {
             return ResponseHandler::error($th);
         }
     }
@@ -29,11 +29,15 @@ class TicketController extends Controller
     public function store(TicketRequest $request)
     {
         try {
-            $tickets = Ticket::create($request->valited());
+            $data = $request->validated();
 
-            return ResponseHandler::success($tickets, 'Ticket Creado Correctamente',201);
+            $data['user_id'] = auth()->id();
+
+            $ticket = Ticket::create($data);
+
+            return ResponseHandler::success($ticket,'Ticket Creado Correctamente',201);
         } catch (\Throwable $th) {
-            //throw $th;
+            return ResponseHandler::error($th);
         }
     }
 
@@ -43,9 +47,9 @@ class TicketController extends Controller
     public function show(string $id)
     {
         try {
-            $tickets = $this->findTicketdOrFail($id);
+            $ticket = $this->findTicketOrFail($id);
 
-            return ResponseHandler::success($tickets, 'Ticket Obtenido Correctamente', 200);
+            return ResponseHandler::success($ticket,'Ticket Obtenido Correctamente',200);
         } catch (\Throwable $th) {
             return ResponseHandler::error($th);
         }
@@ -57,11 +61,11 @@ class TicketController extends Controller
     public function update(TicketRequest $request, string $id)
     {
         try {
-            $tickets = $this->findTicketdOrFail($id);
+            $ticket = $this->findTicketOrFail($id);
 
-            $tickets->update($request->validated());
+            $ticket->update($request->validated());
 
-            return ResponseHandler::success($tickets, 'Ticket Actualizado Correctamente', 200);
+            return ResponseHandler::success($ticket,'Ticket Actualizado Correctamente',200);
         } catch (\Throwable $th) {
             return ResponseHandler::error($th);
         }
@@ -70,15 +74,14 @@ class TicketController extends Controller
     /**
      * @throws NotFoundError si el ticket no existe.
      */
-    private function findTicketdOrFail(string $id): Ticket
+    private function findTicketOrFail(string $id): Ticket
     {
-        $tickets = Ticket::find($id);
+        $ticket = Ticket::find($id);
 
-        if (! $tickets) {
+        if (! $ticket) {
             throw new NotFoundError('Ticket no encontrado');
         }
 
-        return $tickets;
+        return $ticket;
     }
-
 }

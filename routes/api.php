@@ -3,3 +3,4 @@
 require __DIR__.'/auth.php';
 require __DIR__.'/tickets.php';
 require __DIR__.'/ticket_categories.php';
+require __DIR__.'/ticket_comments.php';

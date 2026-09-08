@@ -4,6 +4,8 @@ namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use App\Enums\TicketStatus;
+use App\Enums\TicketPriority;
 use Illuminate\Validation\Rule;
 
 class TicketRequest extends FormRequest
@@ -24,15 +26,52 @@ class TicketRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:225', Rule::unique('tickets', 'name')->ignore($this->route('id'))],
+            'ticket_number' => [
+                'required',
+                'integer',
+                Rule::unique('tickets', 'ticket_number')
+                    ->ignore($this->route('id')),
+            ],
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['required', 'string'],
+            'status' => [
+                'required',
+                Rule::enum(TicketStatus::class),
+            ],
+
+            'priority' => [
+                'required',
+                Rule::enum(TicketPriority::class),
+            ],
+
+            'category_id' => [
+                'required',
+                'integer',
+                'exists:ticket_categories,id',
+            ],
+
         ];
     }
 
     public function messages(): array
     {
         return [
-            'name.required' => 'El campo de nombre es obligatorio.',
-            'name.max' => 'El nombre no puede tener más de 255 caracteres.',
+            'ticket_number.required' => 'El campo de número de ticket es obligatorio.',
+            'ticket_number.integer' => 'El número de ticket debe ser un entero.',
+            'ticket_number.unique' => 'El número de ticket ya existe.',
+
+            'title.required' => 'El campo de título es obligatorio.',
+            'title.string' => 'El título debe ser texto.',
+            'title.max' => 'El título no puede superar los 255 caracteres.',
+
+            'description.required' => 'El campo de descripción es obligatorio.',
+            'description.string' => 'La descripción debe ser texto.',
+
+            'status.required' => 'El campo de estado es obligatorio.',
+            'status.enum' => 'El estado seleccionado no es válido.',
+
+            'priority.required' => 'El campo de prioridad es obligatorio.',
+            'priority.enum' => 'La prioridad seleccionada no es válida.',
         ];
     }
 }

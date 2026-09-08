@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Errors\NotFoundError;
 use App\Helpers\ResponseHandler;
 use App\Http\Requests\TicketCategorieRequest;
-use App\Http\Requests\TicketRequest;
 use App\Models\TicketCategorie;
 
 class TicketCategorieController extends Controller
@@ -27,14 +26,17 @@ class TicketCategorieController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(TicketRequest $request)
+    public function store(TicketCategorieRequest $request)
     {
         try {
-            $ticket_categories = TicketCategorie::create($request->valited());
+            $data = $request->validated();
 
-            return ResponseHandler::success($ticket_categories, 'Categoría de Tickets Creado Correctamente',201);
-        } catch (\Throwable $th) {
-            //throw $th;
+            $data['active'] = $data['active'] ?? true;
+            $ticket_categories = TicketCategorie::create($data);
+
+            return ResponseHandler::success($ticket_categories, 'Categoría de Tickets Creada Correctamente',201);
+            } catch (\Throwable $th) {
+            return ResponseHandler::error($th);
         }
     }
 
