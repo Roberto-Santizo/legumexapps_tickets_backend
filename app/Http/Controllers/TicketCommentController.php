@@ -15,7 +15,7 @@ class TicketCommentController extends Controller
         try {
             $ticket_comments = TicketComment::all();
 
-            return ResponseHandler::success(TicketCommentResource::collection($ticket_comments),'Comentarios de Tickets obtenidos correctamente',200);
+            return ResponseHandler::success(TicketCommentResource::collection($ticket_comments),'Comentarios Obtenidos correctamente',200);
         } catch (\Throwable $th) {
             return ResponseHandler::error($th);
         }
@@ -30,7 +30,7 @@ class TicketCommentController extends Controller
 
             $ticket_comments = TicketComment::create($data);
 
-            return ResponseHandler::success($ticket_comments, 'Comentario de Tickets Creado Correctamente',201);
+            return ResponseHandler::success($ticket_comments, 'Comentarios Creados Correctamente',201);
             } catch (\Throwable $th) {
             return ResponseHandler::error($th);
         }
@@ -41,7 +41,7 @@ class TicketCommentController extends Controller
         try {
             $ticket_comments = $this->findTicketCommentOrFail($id);
 
-            return ResponseHandler::success($ticket_comments, 'Comentarios de Tickets Obtenidos Correctamente', 200);
+            return ResponseHandler::success($ticket_comments, 'Comentarios Obtenidos Correctamente', 200);
         } catch (\Throwable $th) {
             return ResponseHandler::error($th);
         }
@@ -54,7 +54,7 @@ class TicketCommentController extends Controller
 
             $ticket_comments->update($request->validated());
 
-            return ResponseHandler::success($ticket_comments, 'Comentarios de Tickets Actualizado Correctamente', 200);
+            return ResponseHandler::success($ticket_comments, 'Comentarios Actualizados Correctamente', 200);
         } catch (\Throwable $th) {
             return ResponseHandler::error($th);
         }
@@ -65,7 +65,7 @@ class TicketCommentController extends Controller
         $ticket_comments = TicketComment::find($id);
 
         if (! $ticket_comments) {
-            throw new NotFoundError('Comentario de Tickets no encontrado');
+            throw new NotFoundError('Comentario no encontrado');
         }
 
         return $ticket_comments;

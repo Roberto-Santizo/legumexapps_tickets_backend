@@ -17,7 +17,7 @@ class TicketCategorieController extends Controller
         try{
             $ticket_categories = TicketCategorie::all();
 
-            return ResponseHandler::success($ticket_categories, 'Categorías de Tickets Obtenidos Correctamente', 200);
+            return ResponseHandler::success($ticket_categories, 'Categorías Obtenidas Correctamente', 200);
         } catch (\Throwable $th){
             return ResponseHandler::error($th);
         }
@@ -34,7 +34,7 @@ class TicketCategorieController extends Controller
             $data['active'] = $data['active'] ?? true;
             $ticket_categories = TicketCategorie::create($data);
 
-            return ResponseHandler::success($ticket_categories, 'Categoría de Tickets Creada Correctamente',201);
+            return ResponseHandler::success($ticket_categories, 'Categorías Creadas Correctamente',201);
             } catch (\Throwable $th) {
             return ResponseHandler::error($th);
         }
@@ -48,7 +48,7 @@ class TicketCategorieController extends Controller
         try {
             $ticket_categories = $this->findTicketCategoriedOrFail($id);
 
-            return ResponseHandler::success($ticket_categories, 'Categoría de Tickets Obtenido Correctamente', 200);
+            return ResponseHandler::success($ticket_categories, 'Categorías Obtenidas Correctamente', 200);
         } catch (\Throwable $th) {
             return ResponseHandler::error($th);
         }
@@ -64,7 +64,7 @@ class TicketCategorieController extends Controller
 
             $ticket_categories->update($request->validated());
 
-            return ResponseHandler::success($ticket_categories, 'Categoría de Tickets Actualizado Correctamente', 200);
+            return ResponseHandler::success($ticket_categories, 'Categorías Actualizadas Correctamente', 200);
         } catch (\Throwable $th) {
             return ResponseHandler::error($th);
         }
@@ -78,7 +78,7 @@ class TicketCategorieController extends Controller
         $ticket_categories = TicketCategorie::find($id);
 
         if (! $ticket_categories) {
-            throw new NotFoundError('Ticket no encontrado');
+            throw new NotFoundError('Categoría no encontrada');
         }
 
         return $ticket_categories;

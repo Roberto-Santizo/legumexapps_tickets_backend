@@ -15,8 +15,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('ticket_id')->constrained();
             $table->foreignId('user_id')->constrained();
-            $table->string('fila_name');
-            $table->string('fila_path');
+            $table->string('file_name');
+            $table->string('file_path');
             $table->string('mime_type');
             $table->integer('file_size');
             $table->timestamps();
