@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\UserRole;
 use App\Errors\UnauthorizedError;
 use Closure;
 use Illuminate\Http\Request;
@@ -13,7 +14,7 @@ class IsAdmin
     {
         $user = auth()->user();
 
-        if ($user->role != 'admin') {
+        if ($user->role !== UserRole::ADMIN) {
             throw new UnauthorizedError('No autorizado');
         }
 

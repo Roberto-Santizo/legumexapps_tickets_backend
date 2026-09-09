@@ -26,12 +26,6 @@ class TicketRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'ticket_number' => [
-                'required',
-                'integer',
-                Rule::unique('tickets', 'ticket_number')
-                    ->ignore($this->route('id')),
-            ],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
             'status' => [
@@ -51,6 +45,28 @@ class TicketRequest extends FormRequest
             ],
 
         ];
+
+        if (! $isUpdate) {
+            $rules['ticket_number'] = [
+                'required',
+                'integer',
+                Rule::unique('tickets', 'ticket_number'),
+            ];
+        }
+
+        if ($isAdmin) {
+            $rules['status'] = [
+                'required',
+                Rule::enum(TicketStatus::class),
+            ];
+
+            $rules['priority'] = [
+                'required',
+                Rule::enum(TicketPriority::class),
+            ];
+        }
+
+        return $rules;
     }
 
     public function messages(): array

@@ -2,6 +2,14 @@
 
 return [
 
+    'microsoft_graph' => [
+        'tenant_id'     => env('MSGRAPH_TENANT_ID'),
+        'client_id'     => env('MSGRAPH_CLIENT_ID'),
+        'client_secret' => env('MSGRAPH_CLIENT_SECRET'),
+        'from'          => env('MSGRAPH_FROM'),
+        'save_to_sent'  => env('MSGRAPH_SAVE_TO_SENT', true),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services
