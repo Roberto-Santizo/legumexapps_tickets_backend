@@ -19,7 +19,7 @@ class RegisterRequest extends FormRequest
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
-            'role' => ['required', Rule::enum([UserRole::class])],
+            'role' => ['required', Rule::enum(UserRole::class)],
         ];
     }
 
@@ -34,7 +34,7 @@ class RegisterRequest extends FormRequest
             'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
             'password.confirmed' => 'La confirmación de contraseña no coincide.',
             'role.required' => 'El campo de rol es obligatorio.',
-            'role.in' => 'El rol seleccionado no es válido.',
+            'role.enum' => 'El rol seleccionado no es válido.',
         ];
     }
 }

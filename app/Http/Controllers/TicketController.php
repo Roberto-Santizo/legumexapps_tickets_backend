@@ -7,7 +7,11 @@ use App\Helpers\ResponseHandler;
 use App\Http\Requests\TicketRequest;
 use App\Services\MicrosoftGraphMailService;
 use App\Enums\UserRole;
+use App\Enums\TicketPriority;
+use App\Enums\TicketStatus;
 use App\Errors\UnauthorizedError;
+use Symfony\Component\Mime\Email;
+use App\Http\Requests\AssignTicketRequest;
 use App\Models\Ticket;
 use App\Models\User;
 
@@ -24,7 +28,9 @@ class TicketController extends Controller
             if ($user->role === UserRole::ADMIN) {
                 $tickets = Ticket::all();
             } else {
-                $tickets = Ticket::where('user_id', $user->id->get());
+                $tickets = Ticket::where(function ($query) use ($user) {
+                    $query->where('user_id', $user->id)->orWhere('assigned_to', $user->id);
+                })->get();
             }
 
             return ResponseHandler::success($tickets, 'Tickets Obtenidos Correctamente', 200);
@@ -42,14 +48,19 @@ class TicketController extends Controller
             $data = $request->validated();
 
             $data['user_id'] = auth()->id();
+            $data['status'] = TicketStatus::OPEN;
+            $data['priority'] = TicketPriority::MEDIUM;
 
-            $adminusers = User::where('role', '=', 'admin')->get()->first();
-            $emails = ['soportetecnico.tejar@legumex.net', $adminusers->email];
+            $adminEmails = User::where('role', UserRole::ADMIN)->pluck('email')->toArray();
+            $emails = $adminEmails;
             $ticket = Ticket::create($data);
 
+            $html = view('emails.ticket', [
+                'ticket' => $ticket,
+            ])->render();
 
-            $mail->to($emails)->subject('Ticket Creado #' . $ticket->ticket_number)
-                ->html(" <h2>Ticket creado correctamente</h2> <p>Hola {$ticket->user->name},</p> <p>Tu ticket ha sido creado correctamente.</p> <p> <strong>Número:</strong> {$ticket->ticket_number} </p> <p> <strong>Título:</strong> {$ticket->title} </p> <p> <strong>Descripción:</strong> {$ticket->description} </p> ")->send();
+            $mail->to($emails)->subject('Ticket Creado')
+                ->html($html)->embed(public_path('images/logo.jpeg'), 'logo-legumex', 'image/jpeg')->send();
 
             return ResponseHandler::success($ticket, 'Ticket Creado Correctamente', 201);
         } catch (\Throwable $th) {
@@ -85,7 +96,7 @@ class TicketController extends Controller
             $ticket = $this->findTicketOrFail($id);
             $user = auth()->user();
 
-             if ($user->role !== UserRole::ADMIN && $ticket->user_id !== $user->id) {
+            if ($user->role !== UserRole::ADMIN && $ticket->user_id !== $user->id) {
                 throw new UnauthorizedError('No Autorizado');
             }
 
@@ -109,5 +120,45 @@ class TicketController extends Controller
         }
 
         return $ticket;
+    }
+
+    public function assign(AssignTicketRequest $request, string $id)
+    {
+        try {
+            $ticket = $this->findTicketOrFail($id);
+
+            $ticket->update(['assigned_to' => $request->validated('assigned_to')]);
+
+            return ResponseHandler::success($ticket->load('assignedTo'), 'Ticket Asignado Correctamente', 200);
+        } catch (\Throwable $th) {
+            return ResponseHandler::error($th);
+        }
+    }
+
+    public function closed(Ticket $ticket, MicrosoftGraphMailService $mail)
+    {
+        try {
+
+            $user = auth()->user();
+
+            if ($user->role !== UserRole::ADMIN && $ticket->assigned_to !== $user->id) {
+                return ResponseHandler::error(new \Exception('No tiene permiso para cerrar este ticket'));
+            }
+
+            $ticket->update(['status' => TicketStatus::CLOSED, 'closed_at' => now(), 'closed_by' => $user->id]);
+
+            $ticket->load(['user', 'closedBy']);
+
+            // Generamos la plantilla Blade
+            $html = view('emails.ticket-closed', ['ticket' => $ticket,])->render();
+
+            // Enviamos el correo al usuario que creó el ticket
+            $mail->to($ticket->user->email)->subject('Ticket Cerrado')
+            ->html($html)->embed(public_path('images/logo.jpeg'),'logo-legumex','image/jpeg')->send();
+
+            return ResponseHandler::success($ticket->load('closedBy'), 'Ticket Cerrado Correctamente', 200);
+        } catch (\Throwable $th) {
+            return ResponseHandler::error($th);
+        }
     }
 }

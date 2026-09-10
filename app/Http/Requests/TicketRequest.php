@@ -6,6 +6,7 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use App\Enums\TicketStatus;
 use App\Enums\TicketPriority;
+use App\Enums\UserRole;
 use Illuminate\Validation\Rule;
 
 class TicketRequest extends FormRequest
@@ -25,45 +26,30 @@ class TicketRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['required', 'string'],
-            'status' => [
-                'required',
-                Rule::enum(TicketStatus::class),
-            ],
+        $user = auth()->user();
 
-            'priority' => [
-                'required',
-                Rule::enum(TicketPriority::class),
-            ],
+        $isAdmin = $user?->role === UserRole::ADMIN;
+        $rules = [
 
-            'category_id' => [
-                'required',
-                'integer',
-                'exists:ticket_categories,id',
-            ],
+            'title' => ['required','string','max:255'],
 
+            'description' => ['required','string'],
+
+            'category_id' => ['required','integer','exists:ticket_categories,id'],
         ];
 
-        if (! $isUpdate) {
-            $rules['ticket_number'] = [
-                'required',
-                'integer',
-                Rule::unique('tickets', 'ticket_number'),
-            ];
+        if ($this->isMethod('post')){
+            $rules['ticket_number']=['required','integer',Rule::unique('tickets', 'ticket_number')];
         }
 
-        if ($isAdmin) {
-            $rules['status'] = [
-                'required',
-                Rule::enum(TicketStatus::class),
-            ];
+        if($this->isMethod('put') || $this->isMethod('patch')){
+            $rules['ticket_number'] = ['prohibited'];
 
-            $rules['priority'] = [
-                'required',
-                Rule::enum(TicketPriority::class),
-            ];
+            if ($isAdmin){
+                $rules['status'] = ['required', Rule::enum(TicketStatus::class)];
+
+                $rules['priority'] = ['required', Rule::enum(TicketPriority::class)];
+            }
         }
 
         return $rules;
@@ -82,12 +68,6 @@ class TicketRequest extends FormRequest
 
             'description.required' => 'El campo de descripción es obligatorio.',
             'description.string' => 'La descripción debe ser texto.',
-
-            'status.required' => 'El campo de estado es obligatorio.',
-            'status.enum' => 'El estado seleccionado no es válido.',
-
-            'priority.required' => 'El campo de prioridad es obligatorio.',
-            'priority.enum' => 'La prioridad seleccionada no es válida.',
         ];
     }
 }

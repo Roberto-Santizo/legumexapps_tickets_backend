@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use App\Enums\TicketStatus;
 use App\Enums\TicketPriority;
 
-#[Fillable(['ticket_number', 'title', 'description', 'status', 'priority', 'category_id', 'user_id', 'assigned_to'])]
+#[Fillable(['ticket_number', 'title', 'description', 'status', 'priority', 'category_id', 'user_id', 'assigned_to', 'closed_at', 'closed_by'])]
 class Ticket extends Model
 {
     protected function casts(): array
@@ -15,6 +15,7 @@ class Ticket extends Model
         return [
             'status' => TicketStatus::class,
             'priority' => TicketPriority::class,
+            'closed_at' => 'datetime',
         ];
     }
 
@@ -36,5 +37,10 @@ class Ticket extends Model
     public function comments()
     {
         return $this->hasMany(TicketComment::class);
+    }
+
+    public function closedBy()
+    {
+        return $this->belongsTo(User::class, 'closed_by');
     }
 }
