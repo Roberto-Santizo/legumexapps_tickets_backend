@@ -26,8 +26,12 @@ info:
   version: 1.0.0
 
 servers:
+  # Relativo: Swagger usa el mismo origen desde el que se abre /api/documentation
+  # (local, Docker o servidor), sin depender de host/puerto fijos ni de CORS.
+  - url: /
+    description: Este servidor
   - url: http://127.0.0.1:8000
-    description: Servidor local
+    description: Servidor local (php artisan serve)
 
 tags:
   - name: Auth
