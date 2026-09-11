@@ -1,11 +1,1433 @@
-openapi: 3.0.0
+openapi: 3.0.3
 
 info:
   title: Sistema de Tickets API
-  description: Documentación de la API del sistema de tickets
+  description: |
+    Documentación de la API del sistema de tickets (Legumex).
+
+    ## Autenticación
+    Todos los endpoints, excepto `POST /api/login`, requieren un token JWT en la cabecera
+    `Authorization: Bearer <token>`. El token se obtiene en `POST /api/login` y se renueva
+    en `GET /api/check-status`.
+
+    ## Roles
+    - `admin`: acceso total. Puede registrar usuarios, asignar tickets, cambiar `status`/`priority` y cerrar cualquier ticket.
+    - `user`: sólo ve/edita los tickets que creó o que tiene asignados. Puede cerrar únicamente los tickets que tiene asignados.
+
+    ## Envoltorio de respuesta
+    Toda respuesta generada por la API usa el mismo formato:
+
+    ```json
+    { "statusCode": 200, "message": "…", "data": … }
+    ```
+
+    En errores `data` es `null`. Las fallas de validación (422) usan el formato estándar de Laravel
+    (`{ "message": "…", "errors": { "campo": ["…"] } }`).
   version: 1.0.0
 
 servers:
   - url: http://127.0.0.1:8000
+    description: Servidor local
 
-paths: {}
+tags:
+  - name: Auth
+    description: Inicio de sesión, estado de sesión y registro de usuarios.
+  - name: Tickets
+    description: Gestión de tickets.
+  - name: Categorías
+    description: Categorías de tickets.
+  - name: Comentarios
+    description: Comentarios de tickets.
+  - name: Historial
+    description: Historial de cambios de tickets.
+  - name: Adjuntos
+    description: Archivos adjuntos (imágenes) de tickets.
+  - name: Usuarios
+    description: Gestión de usuarios.
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ---------------------------------------------------------------- Auth
+  /api/login:
+    post:
+      tags: [Auth]
+      summary: Iniciar sesión
+      description: Devuelve los datos básicos del usuario y un token JWT.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Sesión iniciada correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthUser'
+              example:
+                statusCode: 200
+                message: Sesión Iniciada Correctamente
+                data:
+                  name: Administrador
+                  email: admin@legumex.com
+                  role: admin
+                  token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9…
+        '400':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 400
+                message: Credenciales inválidas
+                data: null
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/check-status:
+    get:
+      tags: [Auth]
+      summary: Verificar sesión y renovar token
+      description: Devuelve los datos del usuario autenticado junto con un token JWT nuevo.
+      operationId: checkStatus
+      responses:
+        '200':
+          description: Usuario obtenido correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthUser'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /api/register:
+    post:
+      tags: [Auth]
+      summary: Registrar usuario (solo admin)
+      description: Crea un usuario nuevo. Sólo puede invocarlo un administrador autenticado; no existe registro público.
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Usuario creado correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserResource'
+              example:
+                statusCode: 201
+                message: Usuario Creado Correctamente
+                data:
+                  id: 2
+                  name: Juan Pérez
+                  email: juan@legumex.com
+                  role: user
+        '401':
+          $ref: '#/components/responses/UnauthorizedOrUnauthenticated'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ------------------------------------------------------------- Tickets
+  /api/tickets:
+    get:
+      tags: [Tickets]
+      summary: Listar tickets
+      description: |
+        Un `admin` recibe todos los tickets. Un `user` recibe únicamente los tickets que creó
+        o que tiene asignados.
+      operationId: listTickets
+      responses:
+        '200':
+          description: Tickets obtenidos correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Ticket'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    post:
+      tags: [Tickets]
+      summary: Crear ticket
+      description: |
+        Crea un ticket con `status = open` y `priority = medium`. El `user_id` se toma del usuario
+        autenticado. Envía un correo de notificación a todos los administradores (Microsoft Graph).
+      operationId: createTicket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketCreateRequest'
+      responses:
+        '201':
+          description: Ticket creado correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Ticket'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/tickets/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Tickets]
+      summary: Obtener ticket
+      description: Un `user` sólo puede consultar los tickets que creó.
+      operationId: getTicket
+      responses:
+        '200':
+          description: Ticket obtenido correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Ticket'
+        '401':
+          $ref: '#/components/responses/UnauthorizedOrUnauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Tickets]
+      summary: Actualizar ticket
+      description: |
+        Un `user` sólo puede editar los tickets que creó y no puede enviar `status` ni `priority`.
+        Un `admin` **debe** enviar `status` y `priority`. `ticket_number` está prohibido en la actualización.
+      operationId: updateTicket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketUpdateRequest'
+      responses:
+        '200':
+          description: Ticket actualizado correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Ticket'
+        '401':
+          $ref: '#/components/responses/UnauthorizedOrUnauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/tickets/{id}/assign:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    patch:
+      tags: [Tickets]
+      summary: Asignar ticket (solo admin)
+      description: Asigna el ticket a un usuario. Si el usuario autenticado no es `admin`, responde 403.
+      operationId: assignTicket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assigned_to]
+              properties:
+                assigned_to:
+                  type: integer
+                  description: ID de un usuario existente.
+                  example: 3
+      responses:
+        '200':
+          description: Ticket asignado correctamente (incluye la relación `assigned_to`)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/Ticket'
+                          - type: object
+                            properties:
+                              assigned_to:
+                                $ref: '#/components/schemas/UserResource'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/tickets/{ticket}/closed:
+    parameters:
+      - name: ticket
+        in: path
+        required: true
+        description: ID del ticket.
+        schema:
+          type: integer
+          example: 1
+    patch:
+      tags: [Tickets]
+      summary: Cerrar ticket
+      description: |
+        Marca el ticket como `closed`, registra `closed_at` y `closed_by`, y envía un correo al
+        creador del ticket. Sólo un `admin` o el usuario asignado al ticket pueden cerrarlo.
+      operationId: closeTicket
+      responses:
+        '200':
+          description: Ticket cerrado correctamente (incluye las relaciones `user` y `closed_by`)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/Ticket'
+                          - type: object
+                            properties:
+                              user:
+                                $ref: '#/components/schemas/UserResource'
+                              closed_by:
+                                $ref: '#/components/schemas/UserResource'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: Ticket no encontrado (route model binding)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '500':
+          description: Sin permiso para cerrar el ticket o fallo al enviar el correo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 500
+                message: No tiene permiso para cerrar este ticket
+                data: null
+
+  # ---------------------------------------------------------- Categorías
+  /api/ticket_categories:
+    get:
+      tags: [Categorías]
+      summary: Listar categorías
+      operationId: listTicketCategories
+      responses:
+        '200':
+          description: Categorías obtenidas correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TicketCategorie'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    post:
+      tags: [Categorías]
+      summary: Crear categoría
+      description: Si no se envía `active`, se guarda como `true`.
+      operationId: createTicketCategorie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketCategorieRequest'
+      responses:
+        '201':
+          description: Categoría creada correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TicketCategorie'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/ticket_categories/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Categorías]
+      summary: Obtener categoría
+      operationId: getTicketCategorie
+      responses:
+        '200':
+          description: Categoría obtenida correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TicketCategorie'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Categorías]
+      summary: Actualizar categoría
+      operationId: updateTicketCategorie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketCategorieRequest'
+      responses:
+        '200':
+          description: Categoría actualizada correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TicketCategorie'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # --------------------------------------------------------- Comentarios
+  /api/ticket_comments:
+    get:
+      tags: [Comentarios]
+      summary: Listar comentarios
+      operationId: listTicketComments
+      responses:
+        '200':
+          description: Comentarios obtenidos correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TicketCommentResource'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    post:
+      tags: [Comentarios]
+      summary: Crear comentario
+      description: El `user_id` se toma del usuario autenticado.
+      operationId: createTicketComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketCommentRequest'
+      responses:
+        '201':
+          description: Comentario creado correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TicketComment'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/ticket_comments/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Comentarios]
+      summary: Obtener comentario
+      operationId: getTicketComment
+      responses:
+        '200':
+          description: Comentario obtenido correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TicketComment'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Comentarios]
+      summary: Actualizar comentario
+      operationId: updateTicketComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketCommentRequest'
+      responses:
+        '200':
+          description: Comentario actualizado correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TicketComment'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ----------------------------------------------------------- Historial
+  /api/ticket_histories:
+    get:
+      tags: [Historial]
+      summary: Listar historial de tickets
+      operationId: listTicketHistories
+      responses:
+        '200':
+          description: Historial obtenido correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TicketHistoryResource'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    post:
+      tags: [Historial]
+      summary: Crear registro de historial
+      description: El `user_id` se toma del usuario autenticado.
+      operationId: createTicketHistory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketHistoryRequest'
+      responses:
+        '201':
+          description: Historial creado correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TicketHistory'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/ticket_histories/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Historial]
+      summary: Obtener registro de historial
+      operationId: getTicketHistory
+      responses:
+        '200':
+          description: Historial obtenido correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TicketHistory'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Historial]
+      summary: Actualizar registro de historial
+      operationId: updateTicketHistory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketHistoryRequest'
+      responses:
+        '200':
+          description: Historial actualizado correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TicketHistory'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ------------------------------------------------------------ Adjuntos
+  /api/ticket_attachments:
+    get:
+      tags: [Adjuntos]
+      summary: Listar archivos adjuntos
+      operationId: listTicketAttachments
+      responses:
+        '200':
+          description: Archivos adjuntos obtenidos correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TicketAttachmentResource'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    post:
+      tags: [Adjuntos]
+      summary: Subir archivo adjunto
+      description: |
+        Recibe `multipart/form-data`. El archivo debe ser una imagen **JPG, PNG o WEBP** de máximo
+        **5 MB** (el almacenamiento lo valida y responde 400 si no cumple). Se guarda en el disco
+        `public` con nombre UUID; `file_name`, `mime_type`, `file_size` y `file_path` se calculan
+        en el servidor y `user_id` se toma del usuario autenticado.
+      operationId: createTicketAttachment
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [ticket_id, file]
+              properties:
+                ticket_id:
+                  type: integer
+                  example: 1
+                file:
+                  type: string
+                  format: binary
+                  description: Imagen JPG, PNG o WEBP (máx. 5 MB).
+      responses:
+        '201':
+          description: Archivo adjunto creado correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TicketAttachment'
+        '400':
+          description: Archivo inválido, formato no soportado o mayor a 5 MB
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 400
+                message: El archivo debe ser una imagen JPG, PNG o WEBP
+                data: null
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/ticket_attachments/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Adjuntos]
+      summary: Obtener archivo adjunto
+      operationId: getTicketAttachment
+      responses:
+        '200':
+          description: Archivo adjunto obtenido correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TicketAttachment'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Adjuntos]
+      summary: Actualizar archivo adjunto
+      description: |
+        Valida `ticket_id` y `file` igual que en la creación, pero sólo actualiza `ticket_id`;
+        el archivo enviado no se vuelve a almacenar ni reemplaza el anterior.
+      operationId: updateTicketAttachment
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [ticket_id, file]
+              properties:
+                ticket_id:
+                  type: integer
+                  example: 1
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Archivo adjunto actualizado correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TicketAttachment'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ------------------------------------------------------------ Usuarios
+  /api/users:
+    get:
+      tags: [Usuarios]
+      summary: Listar usuarios
+      operationId: listUsers
+      responses:
+        '200':
+          description: Usuarios obtenidos correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/UserResource'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    post:
+      tags: [Usuarios]
+      summary: Crear usuario
+      description: A diferencia de `POST /api/register`, no exige rol `admin` ni `password_confirmation`.
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+      responses:
+        '201':
+          description: Usuario creado correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          description: Error del servidor (p. ej. correo duplicado, no validado por `unique`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /api/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Usuarios]
+      summary: Obtener usuario
+      operationId: getUser
+      responses:
+        '200':
+          description: Usuario obtenido correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Usuarios]
+      summary: Actualizar usuario
+      description: Todos los campos son obligatorios; la contraseña siempre se reemplaza.
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+      responses:
+        '200':
+          description: Usuario actualizado correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token obtenido en `POST /api/login`.
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      description: ID del recurso.
+      schema:
+        type: integer
+        example: 1
+
+  responses:
+    Unauthenticated:
+      description: Token ausente, inválido o expirado
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          example:
+            message: Token not provided
+    UnauthorizedOrUnauthenticated:
+      description: Token ausente/inválido, o el usuario no tiene permiso sobre el recurso
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            statusCode: 401
+            message: No autorizado
+            data: null
+    Forbidden:
+      description: El usuario autenticado no es administrador
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          example:
+            message: This action is unauthorized.
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            statusCode: 404
+            message: Ticket no encontrado
+            data: null
+    ValidationError:
+      description: Error de validación
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrorResponse'
+    ServerError:
+      description: Error interno (p. ej. fallo al enviar el correo por Microsoft Graph)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            statusCode: 500
+            message: Error interno
+            data: null
+
+  schemas:
+    # ------------------------------------------------------- Envoltorios
+    Envelope:
+      type: object
+      required: [statusCode, message, data]
+      properties:
+        statusCode:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: Operación realizada correctamente
+        data:
+          description: Contenido de la respuesta (objeto, arreglo o `null`).
+    ErrorEnvelope:
+      type: object
+      required: [statusCode, message, data]
+      properties:
+        statusCode:
+          type: integer
+          example: 404
+        message:
+          type: string
+          example: Recurso no encontrado
+        data:
+          nullable: true
+          example: null
+    ValidationErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: El campo de título es obligatorio.
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          example:
+            title:
+              - El campo de título es obligatorio.
+
+    # ------------------------------------------------------------ Enums
+    UserRole:
+      type: string
+      enum: [admin, user]
+      example: user
+    TicketStatus:
+      type: string
+      enum: [open, in_progress, pending, resolved, closed, cancelled]
+      example: open
+    TicketPriority:
+      type: string
+      enum: [low, medium, high, critical]
+      example: medium
+
+    # ------------------------------------------------------------- Auth
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@legumex.com
+        password:
+          type: string
+          format: password
+          example: secret123
+    RegisterRequest:
+      type: object
+      required: [name, email, password, password_confirmation, role]
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          example: Juan Pérez
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: Debe ser único.
+          example: juan@legumex.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: secret123
+        password_confirmation:
+          type: string
+          format: password
+          description: Debe coincidir con `password`.
+          example: secret123
+        role:
+          $ref: '#/components/schemas/UserRole'
+    AuthUser:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Administrador
+        email:
+          type: string
+          format: email
+          example: admin@legumex.com
+        role:
+          $ref: '#/components/schemas/UserRole'
+        token:
+          type: string
+          description: Token JWT.
+          example: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9…
+
+    # ---------------------------------------------------------- Usuarios
+    UserRequest:
+      type: object
+      required: [name, email, password, role]
+      properties:
+        name:
+          type: string
+          maxLength: 225
+          example: Juan Pérez
+        email:
+          type: string
+          format: email
+          maxLength: 225
+          example: juan@legumex.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: secret123
+        role:
+          $ref: '#/components/schemas/UserRole'
+    UserResource:
+      type: object
+      description: Representación reducida del usuario (`UserResource`).
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Juan Pérez
+        email:
+          type: string
+          format: email
+          example: juan@legumex.com
+        role:
+          $ref: '#/components/schemas/UserRole'
+    User:
+      type: object
+      description: Modelo `User` completo (sin `password` ni `remember_token`).
+      allOf:
+        - $ref: '#/components/schemas/UserResource'
+        - type: object
+          properties:
+            email_verified_at:
+              type: string
+              format: date-time
+              nullable: true
+              example: null
+            created_at:
+              type: string
+              format: date-time
+              example: '2026-09-11T10:00:00.000000Z'
+            updated_at:
+              type: string
+              format: date-time
+              example: '2026-09-11T10:00:00.000000Z'
+
+    # ----------------------------------------------------------- Tickets
+    TicketCreateRequest:
+      type: object
+      required: [ticket_number, title, description, category_id]
+      properties:
+        ticket_number:
+          type: integer
+          description: Número de ticket suministrado por el cliente. Debe ser único.
+          example: 1001
+        title:
+          type: string
+          maxLength: 255
+          example: No funciona la impresora
+        description:
+          type: string
+          example: La impresora del área de empaque no responde.
+        category_id:
+          type: integer
+          description: ID de una categoría existente.
+          example: 1
+    TicketUpdateRequest:
+      type: object
+      required: [title, description, category_id]
+      properties:
+        title:
+          type: string
+          maxLength: 255
+          example: No funciona la impresora
+        description:
+          type: string
+          example: La impresora del área de empaque no responde.
+        category_id:
+          type: integer
+          example: 1
+        status:
+          allOf:
+            - $ref: '#/components/schemas/TicketStatus'
+          description: Obligatorio para `admin`; no permitido para `user`.
+        priority:
+          allOf:
+            - $ref: '#/components/schemas/TicketPriority'
+          description: Obligatorio para `admin`; no permitido para `user`.
+    Ticket:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        ticket_number:
+          type: integer
+          example: 1001
+        title:
+          type: string
+          example: No funciona la impresora
+        description:
+          type: string
+          example: La impresora del área de empaque no responde.
+        status:
+          $ref: '#/components/schemas/TicketStatus'
+        priority:
+          $ref: '#/components/schemas/TicketPriority'
+        category_id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          description: Usuario que creó el ticket.
+          example: 2
+        assigned_to:
+          type: integer
+          nullable: true
+          description: Usuario asignado.
+          example: 3
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        closed_by:
+          type: integer
+          nullable: true
+          description: Usuario que cerró el ticket.
+          example: null
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-09-11T10:00:00.000000Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2026-09-11T10:00:00.000000Z'
+
+    # -------------------------------------------------------- Categorías
+    TicketCategorieRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          description: Debe ser único.
+          example: Hardware
+        description:
+          type: string
+          nullable: true
+          example: Problemas con equipos físicos.
+        active:
+          type: boolean
+          example: true
+    TicketCategorie:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Hardware
+        description:
+          type: string
+          nullable: true
+          example: Problemas con equipos físicos.
+        active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-09-11T10:00:00.000000Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2026-09-11T10:00:00.000000Z'
+
+    # ------------------------------------------------------- Comentarios
+    TicketCommentRequest:
+      type: object
+      required: [ticket_id, description]
+      properties:
+        ticket_id:
+          type: integer
+          example: 1
+        description:
+          type: string
+          example: Ya se revisó el equipo, falta repuesto.
+    TicketCommentResource:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        ticket_id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 2
+        description:
+          type: string
+          example: Ya se revisó el equipo, falta repuesto.
+    TicketComment:
+      allOf:
+        - $ref: '#/components/schemas/TicketCommentResource'
+        - $ref: '#/components/schemas/Timestamps'
+
+    # --------------------------------------------------------- Historial
+    TicketHistoryRequest:
+      type: object
+      required: [ticket_id, action]
+      properties:
+        ticket_id:
+          type: integer
+          example: 1
+        action:
+          type: string
+          maxLength: 225
+          example: status_changed
+        old_value:
+          type: string
+          maxLength: 225
+          nullable: true
+          example: open
+        new_value:
+          type: string
+          maxLength: 225
+          nullable: true
+          example: in_progress
+    TicketHistoryResource:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        ticket_id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 2
+        action:
+          type: string
+          example: status_changed
+        old_value:
+          type: string
+          nullable: true
+          example: open
+        new_value:
+          type: string
+          nullable: true
+          example: in_progress
+    TicketHistory:
+      allOf:
+        - $ref: '#/components/schemas/TicketHistoryResource'
+        - $ref: '#/components/schemas/Timestamps'
+
+    # ---------------------------------------------------------- Adjuntos
+    TicketAttachmentResource:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        ticket_id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 2
+        file_name:
+          type: string
+          example: impresora.jpg
+        file_path:
+          type: string
+          description: Ruta relativa dentro del disco `public`.
+          example: images/3f2b1c9e-7a4d-4e8b-9c1d-2f6a8b7c5d4e.jpg
+        file_size:
+          type: integer
+          description: Tamaño en bytes.
+          example: 245760
+    TicketAttachment:
+      allOf:
+        - $ref: '#/components/schemas/TicketAttachmentResource'
+        - type: object
+          properties:
+            mime_type:
+              type: string
+              example: image/jpeg
+        - $ref: '#/components/schemas/Timestamps'
+
+    # ------------------------------------------------------------ Común
+    Timestamps:
+      type: object
+      properties:
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-09-11T10:00:00.000000Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2026-09-11T10:00:00.000000Z'
