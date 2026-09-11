@@ -36,7 +36,9 @@ class TicketRequest extends FormRequest
             'description' => ['required','string'],
 
             'category_id' => ['required','integer','exists:ticket_categories,id'],
-        ];
+
+            'priority' => ['required', Rule::enum(TicketPriority::class)],
+            ];
 
         if ($this->isMethod('post')){
             $rules['ticket_number']=['required','integer',Rule::unique('tickets', 'ticket_number')];

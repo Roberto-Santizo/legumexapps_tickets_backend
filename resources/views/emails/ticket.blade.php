@@ -208,6 +208,26 @@
                                     </td>
                                 </tr>
 
+                                <!-- PRIORIDAD -->
+                                <tr>
+                                    <td style="padding: 12px 0;
+                                        border-bottom: 1px solid #e2e8f0;">
+
+                                        <span style="font-size: 12px;
+                                            color: #64748b;">
+                                            PRIORIDAD
+                                        </span>
+
+                                        <div style="margin-top: 5px;
+                                            font-size: 15px;
+                                            color: #334155;
+                                            font-weight: bold;">
+                                            {{ $ticket->priority->label() }}
+                                        </div>
+
+                                    </td>
+                                </tr>
+
 
                                 <!-- DESCRIPCIÓN -->
                                 <tr>

@@ -49,17 +49,22 @@ class TicketController extends Controller
 
             $data['user_id'] = auth()->id();
             $data['status'] = TicketStatus::OPEN;
-            $data['priority'] = TicketPriority::MEDIUM;
 
             $adminEmails = User::where('role', UserRole::ADMIN)->pluck('email')->toArray();
             $emails = $adminEmails;
             $ticket = Ticket::create($data);
 
+            $priority = match ($ticket->priority) {
+                TicketPriority::LOW => 'Baja',
+                TicketPriority::MEDIUM => 'Media',
+                TicketPriority::HIGH => 'Alta',
+            };
+
             $html = view('emails.ticket', [
                 'ticket' => $ticket,
             ])->render();
 
-            $mail->to($emails)->subject('Ticket Creado')
+            $mail->to($emails)->subject('Ticket Creado - Prioridad: '.$priority)
                 ->html($html)->embed(public_path('images/logo.jpeg'), 'logo-legumex', 'image/jpeg')->send();
 
             return ResponseHandler::success($ticket, 'Ticket Creado Correctamente', 201);
@@ -154,7 +159,7 @@ class TicketController extends Controller
 
             // Enviamos el correo al usuario que creó el ticket
             $mail->to($ticket->user->email)->subject('Ticket Cerrado')
-            ->html($html)->embed(public_path('images/logo.jpeg'),'logo-legumex','image/jpeg')->send();
+                ->html($html)->embed(public_path('images/logo.jpeg'), 'logo-legumex', 'image/jpeg')->send();
 
             return ResponseHandler::success($ticket->load('closedBy'), 'Ticket Cerrado Correctamente', 200);
         } catch (\Throwable $th) {
